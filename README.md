@@ -63,20 +63,6 @@ Output APK:
 
 - android/app/build/outputs/apk/debug/app-debug.apk
 
-## How to publish this to your GitHub account
-
-1. Create an empty repository on GitHub (do not add README there)
-2. In terminal, run from this folder:
-
-```bash
-git init
-git add .
-git commit -m "Initial SS2do functionality release"
-git branch -M main
-git remote add origin https://github.com/<your-user>/<your-repo>.git
-git push -u origin main
-```
-
 ## Practical testing flow
 
 1. Take screenshot on phone
