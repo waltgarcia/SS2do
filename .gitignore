@@ -1,0 +1,21 @@
+# Node
+node_modules/
+
+# Generated web build
+www/
+
+# Android/Gradle build outputs
+android/.gradle/
+android/build/
+android/app/build/
+
+# Local machine config
+android/local.properties
+
+# Editor/OS
+.DS_Store
+.vscode/
+
+# Keep test APK in releases tracked
+!releases/
+!releases/*.apk

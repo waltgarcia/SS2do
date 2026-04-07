@@ -1,0 +1,23 @@
+{
+  "name": "ss2do",
+  "version": "1.0.0",
+  "description": "A minimal web app to convert mobile screenshots into actionables.",
+  "main": "app.js",
+  "scripts": {
+    "clean": "rm -rf www",
+    "copy:web": "mkdir -p www && cp index.html app.js styles.css www/",
+    "sync:android": "npm run copy:web && npx cap sync android",
+    "open:android": "npx cap open android",
+    "build:apk:debug": "npm run sync:android && cd android && ./gradlew assembleDebug",
+    "test": "echo \"No tests configured\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0"
+  }
+}

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: content:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cdn.jsdelivr.net https://tessdata.projectnaptha.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    />
+    <title>SS2do MVP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">screenshot to actionable</p>
+        <h1>SS2do MVP</h1>
+        <p>
+          Upload a screenshot, extract text, and assign it to a query + action.
+          Keep a lightweight queue of what to do next.
+        </p>
+      </header>
+
+      <section class="panel capture-panel">
+        <h2>1) Capture</h2>
+        <label class="uploader" for="screenshotInput">
+          <input id="screenshotInput" type="file" accept="image/*" />
+          <span>Pick screenshot from gallery</span>
+        </label>
+
+        <label class="uploader" for="cameraInput">
+          <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+          <span>Take picture with camera</span>
+        </label>
+
+        <div class="preview-wrap">
+          <img id="previewImage" alt="Screenshot preview" />
+          <p id="emptyPreviewText">No screenshot selected yet</p>
+        </div>
+
+        <button id="analyzeBtn" class="primary-btn" disabled>Analyze Screenshot</button>
+        <p id="ocrStatus" class="status"></p>
+      </section>
+
+      <section class="panel classify-panel">
+        <h2>2) Assign Query + Action</h2>
+        <div class="field-grid">
+          <label>
+            Suggested query
+            <input id="queryInput" type="text" placeholder="e.g. Deep learning paper title pdf" />
+          </label>
+
+          <label>
+            Action bucket (editable)
+            <input id="actionInput" list="actionSuggestions" type="text" placeholder="e.g. Find and download paper" />
+            <datalist id="actionSuggestions"></datalist>
+          </label>
+        </div>
+
+        <label>
+          OCR text (editable)
+          <textarea id="ocrText" rows="8" placeholder="Extracted text appears here"></textarea>
+        </label>
+
+        <button id="saveItemBtn" class="secondary-btn" disabled>Save to Actionables</button>
+      </section>
+
+      <section class="panel queue-panel">
+        <div class="queue-head">
+          <h2>3) Actionables Queue</h2>
+          <button id="clearAllBtn" class="ghost-btn">Clear all</button>
+        </div>
+        <div id="itemsList" class="items-list"></div>
+      </section>
+    </main>
+  </body>
+</html>
