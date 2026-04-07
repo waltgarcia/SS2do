@@ -57,8 +57,10 @@
         <h2>2) Assign Query + Action</h2>
         <div class="field-grid">
           <label>
-            Suggested query
-            <input id="queryInput" type="text" placeholder="e.g. Deep learning paper title pdf" />
+            Query title
+            <input id="queryInput" type="text" placeholder="e.g. Download paper: CLIP 2021" />
+            <p class="field-help">Suggested queries (tap to use):</p>
+            <div id="querySuggestions" class="query-suggestions"></div>
           </label>
 
           <label>
@@ -82,6 +84,8 @@
           <button id="clearAllBtn" class="ghost-btn">Clear all</button>
         </div>
         <div id="itemsList" class="items-list"></div>
+        <h3 class="log-title">Resolved log</h3>
+        <div id="resolvedLogList" class="resolved-log-list"></div>
       </section>
     </main>
   </body>

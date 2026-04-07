@@ -8,10 +8,11 @@ A screenshot can mean "read this paper", "follow up on this message", "check thi
 
 - Accepts input from gallery, camera, and Android share sheet
 - Extracts text from the image with OCR (Spanish + English)
-- Suggests a query and an action bucket
+- Suggests query options as clickable choices (without auto-filling)
 - Lets you save using only the query if needed
 - Keeps an actionable queue grouped by action buckets
 - Stores a thumbnail of the screenshot with each actionable item
+- Keeps a resolved history log over time
 - Preserves data locally on device (no backend required)
 
 ## Why this exists

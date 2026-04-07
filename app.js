@@ -1,4 +1,5 @@
 const STORAGE_KEY = "ss2do_actionables_v1";
+const RESOLVED_LOG_KEY = "ss2do_resolved_log_v1";
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 
@@ -31,7 +32,9 @@ const state = {
   file: null,
   imageSource: null,
   ocrText: "",
+  querySuggestions: [],
   items: loadItems(),
+  resolvedLog: loadResolvedLog(),
 };
 
 const screenshotInput = document.querySelector("#screenshotInput");
@@ -41,15 +44,18 @@ const emptyPreviewText = document.querySelector("#emptyPreviewText");
 const analyzeBtn = document.querySelector("#analyzeBtn");
 const ocrStatus = document.querySelector("#ocrStatus");
 const queryInput = document.querySelector("#queryInput");
+const querySuggestions = document.querySelector("#querySuggestions");
 const actionInput = document.querySelector("#actionInput");
 const actionSuggestions = document.querySelector("#actionSuggestions");
 const ocrText = document.querySelector("#ocrText");
 const saveItemBtn = document.querySelector("#saveItemBtn");
 const itemsList = document.querySelector("#itemsList");
+const resolvedLogList = document.querySelector("#resolvedLogList");
 const clearAllBtn = document.querySelector("#clearAllBtn");
 
 bootstrapActions();
 renderItems();
+renderResolvedLog();
 syncSaveButtonState();
 consumePendingSharedImageUri();
 
@@ -71,6 +77,8 @@ function bootstrapActions() {
   actionSuggestions.innerHTML = ACTIONS.map(
     (a) => `<option value="${a.label}"></option>`
   ).join("");
+
+  renderSuggestedQueries([]);
 }
 
 function syncSaveButtonState() {
@@ -134,10 +142,11 @@ async function analyzeScreenshot() {
     ocrText.value = state.ocrText;
 
     const suggestion = suggestAction(state.ocrText);
-    queryInput.value = suggestion.query;
+    state.querySuggestions = suggestion.queryCandidates;
+    renderSuggestedQueries(state.querySuggestions);
     actionInput.value = suggestion.actionLabel;
 
-    ocrStatus.textContent = "OCR complete. Review and save.";
+    ocrStatus.textContent = "OCR complete. Pick a suggested query or type your own title.";
     syncSaveButtonState();
   } catch (error) {
     console.error(error);
@@ -152,33 +161,93 @@ async function analyzeScreenshot() {
 function suggestAction(rawText) {
   const text = rawText.toLowerCase();
   const compact = text.replace(/\s+/g, " ").trim();
+  const title = suggestTitleFromText(compact);
 
   if (/doi|abstract|references|journal|vol\.|arxiv|conference/.test(text)) {
-    const titleGuess = compact.slice(0, 140) || "paper title";
     return {
       actionLabel: "Find and download paper",
-      query: `${titleGuess} pdf`,
+      queryCandidates: [
+        `Download paper: ${title}`,
+        `${title} pdf`,
+        `Find source for ${title}`,
+      ],
     };
   }
 
   if (/meeting|call|agenda|tomorrow|today|deadline|deliverable/.test(text)) {
     return {
       actionLabel: "Set reminder / task",
-      query: compact.slice(0, 120) || "Follow up this screenshot",
+      queryCandidates: [
+        `Follow up: ${title}`,
+        `Prepare for: ${title}`,
+        `Schedule task: ${title}`,
+      ],
     };
   }
 
   if (/invoice|receipt|total|payment|mxn|usd|\$\d/.test(text)) {
     return {
       actionLabel: "Summarize and store notes",
-      query: "Extract expenses and save summary",
+      queryCandidates: [
+        `Review expense: ${title}`,
+        "Extract expenses and save summary",
+        `Validate payment details: ${title}`,
+      ],
     };
   }
 
   return {
     actionLabel: "Open web search",
-    query: compact.slice(0, 130) || "Search screenshot context",
+    queryCandidates: [
+      `Research: ${title}`,
+      `Find context for: ${title}`,
+      "Search screenshot context",
+    ],
   };
+}
+
+function suggestTitleFromText(compactText) {
+  if (!compactText) {
+    return "screenshot topic";
+  }
+
+  const cleaned = compactText.replace(/[^a-z0-9\s]/gi, " ");
+  const words = cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((w) => w.length > 2)
+    .slice(0, 8);
+
+  if (!words.length) {
+    return "screenshot topic";
+  }
+
+  return words
+    .slice(0, 5)
+    .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function renderSuggestedQueries(list) {
+  if (!list.length) {
+    querySuggestions.innerHTML = '<p class="query-suggestion-empty">Analyze an image to get suggestions.</p>';
+    return;
+  }
+
+  const unique = [...new Set(list.map((s) => String(s).trim()).filter(Boolean))];
+  querySuggestions.innerHTML = unique
+    .map(
+      (s) =>
+        `<button type="button" class="query-chip" data-query="${escapeHtml(s)}">${escapeHtml(s)}</button>`
+    )
+    .join("");
+
+  for (const chip of querySuggestions.querySelectorAll(".query-chip")) {
+    chip.addEventListener("click", () => {
+      queryInput.value = chip.dataset.query || "";
+      syncSaveButtonState();
+    });
+  }
 }
 
 async function saveItem() {
@@ -201,6 +270,7 @@ async function saveItem() {
     ocrSnippet: extracted.slice(0, 280),
     screenshotThumb,
     done: false,
+    resolvedAt: null,
   };
 
   state.items.unshift(item);
@@ -243,7 +313,6 @@ function renderItems() {
             <p class="item-snippet">${escapeHtml(item.ocrSnippet || "No OCR snippet")}</p>
             <div class="item-actions">
               <button data-id="${item.id}" data-type="toggle">${item.done ? "Mark pending" : "Mark done"}</button>
-              <button data-id="${item.id}" data-type="run">Run action</button>
               <button data-id="${item.id}" data-type="delete" class="danger-btn">Delete</button>
             </div>
           </article>`;
@@ -276,21 +345,29 @@ function handleItemAction(event) {
   }
 
   if (type === "toggle") {
-    state.items[index].done = !state.items[index].done;
-  }
-
-  if (type === "run") {
     const item = state.items[index];
-    const actionObj = ACTIONS.find((a) => a.label.toLowerCase() === normalizeActionLabel(item.action).toLowerCase());
-    if (actionObj?.createUrl) {
-      window.open(actionObj.createUrl(item.query), "_blank", "noopener");
-    } else {
-      ocrStatus.textContent = `Manual action: ${normalizeActionLabel(item.action)}`;
+    const wasDone = item.done;
+    item.done = !item.done;
+    if (!wasDone && item.done) {
+      const resolvedAt = new Date().toISOString();
+      item.resolvedAt = resolvedAt;
+      state.resolvedLog.unshift({
+        id: crypto.randomUUID(),
+        itemId: item.id,
+        query: item.query,
+        action: item.action,
+        resolvedAt,
+      });
+      saveResolvedLog(state.resolvedLog);
+    }
+    if (wasDone && !item.done) {
+      item.resolvedAt = null;
     }
   }
 
   saveItems(state.items);
   renderItems();
+  renderResolvedLog();
 }
 
 function clearAll() {
@@ -300,6 +377,25 @@ function clearAll() {
   state.items = [];
   saveItems(state.items);
   renderItems();
+}
+
+function renderResolvedLog() {
+  if (!state.resolvedLog.length) {
+    resolvedLogList.innerHTML = '<p class="item-snippet">No resolved entries yet.</p>';
+    return;
+  }
+
+  resolvedLogList.innerHTML = state.resolvedLog
+    .slice(0, 100)
+    .map((entry) => {
+      const when = new Date(entry.resolvedAt).toLocaleString();
+      return `
+      <article class="resolved-log-item">
+        <p class="item-title">${escapeHtml(entry.query)}</p>
+        <p class="item-meta">${escapeHtml(normalizeActionLabel(entry.action))} | Resolved: ${escapeHtml(when)}</p>
+      </article>`;
+    })
+    .join("");
 }
 
 function saveItems(items) {
@@ -318,6 +414,25 @@ function loadItems() {
       ...item,
       action: normalizeActionLabel(item.action),
     }));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+function saveResolvedLog(entries) {
+  try {
+    localStorage.setItem(RESOLVED_LOG_KEY, JSON.stringify(entries));
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+function loadResolvedLog() {
+  try {
+    return JSON.parse(localStorage.getItem(RESOLVED_LOG_KEY) || "[]");
   } catch (error) {
     console.error(error);
     return [];
