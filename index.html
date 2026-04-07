@@ -68,6 +68,23 @@
             <input id="actionInput" list="actionSuggestions" type="text" placeholder="e.g. Find and download paper" />
             <datalist id="actionSuggestions"></datalist>
           </label>
+
+          <label>
+            Tags (optional)
+            <input id="tagsInput" type="text" placeholder="e.g. research, ai, urgent" />
+            <p class="field-help">Separate tags with commas.</p>
+          </label>
+
+          <label>
+            Deadline (optional)
+            <input id="deadlineDateInput" type="date" />
+            <select id="deadlineModeSelect">
+              <option value="none">No reminder</option>
+              <option value="before">Before (1 day before)</option>
+              <option value="on">On (8:00 AM same day)</option>
+              <option value="after">After (1 day after)</option>
+            </select>
+          </label>
         </div>
 
         <label>

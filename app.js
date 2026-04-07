@@ -47,6 +47,9 @@ const queryInput = document.querySelector("#queryInput");
 const querySuggestions = document.querySelector("#querySuggestions");
 const actionInput = document.querySelector("#actionInput");
 const actionSuggestions = document.querySelector("#actionSuggestions");
+const tagsInput = document.querySelector("#tagsInput");
+const deadlineDateInput = document.querySelector("#deadlineDateInput");
+const deadlineModeSelect = document.querySelector("#deadlineModeSelect");
 const ocrText = document.querySelector("#ocrText");
 const saveItemBtn = document.querySelector("#saveItemBtn");
 const itemsList = document.querySelector("#itemsList");
@@ -146,7 +149,14 @@ async function analyzeScreenshot() {
     renderSuggestedQueries(state.querySuggestions);
     actionInput.value = suggestion.actionLabel;
 
-    ocrStatus.textContent = "OCR complete. Pick a suggested query or type your own title.";
+    const detectedDate = detectDateFromText(state.ocrText);
+    if (detectedDate) {
+      deadlineDateInput.value = detectedDate;
+      ocrStatus.textContent = "OCR complete. Pick a query and optionally configure deadline reminder.";
+    } else {
+      ocrStatus.textContent = "OCR complete. Pick a suggested query or type your own title.";
+    }
+
     syncSaveButtonState();
   } catch (error) {
     console.error(error);
@@ -254,11 +264,21 @@ async function saveItem() {
   const query = queryInput.value.trim();
   const action = normalizeActionLabel(actionInput.value);
   const extracted = ocrText.value.trim();
+  const tags = parseTags(tagsInput.value);
+  const deadlineDate = normalizeDeadlineDate(deadlineDateInput.value);
+  const deadlineMode = normalizeDeadlineMode(deadlineModeSelect.value);
 
   if (!query) {
     ocrStatus.textContent = "Query is required.";
     return;
   }
+
+  if (deadlineMode !== "none" && !deadlineDate) {
+    ocrStatus.textContent = "Pick a valid deadline date or select No reminder.";
+    return;
+  }
+
+  const reminderAt = computeReminderAt(deadlineDate, deadlineMode);
 
   const screenshotThumb = await buildScreenshotThumbnail();
 
@@ -267,8 +287,12 @@ async function saveItem() {
     createdAt: new Date().toISOString(),
     query,
     action,
+    tags,
     ocrSnippet: extracted.slice(0, 280),
     screenshotThumb,
+    deadlineDate,
+    deadlineMode,
+    reminderAt,
     done: false,
     resolvedAt: null,
   };
@@ -310,6 +334,8 @@ function renderItems() {
             ${item.screenshotThumb ? `<img class="item-thumb" src="${escapeHtml(item.screenshotThumb)}" alt="Saved screenshot" />` : ""}
             <p class="item-title">${escapeHtml(item.query)}</p>
             <p class="item-meta">${escapeHtml(created)}</p>
+            ${renderTags(item.tags)}
+            ${renderDeadline(item)}
             <p class="item-snippet">${escapeHtml(item.ocrSnippet || "No OCR snippet")}</p>
             <div class="item-actions">
               <button data-id="${item.id}" data-type="toggle">${item.done ? "Mark pending" : "Mark done"}</button>
@@ -413,6 +439,10 @@ function loadItems() {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").map((item) => ({
       ...item,
       action: normalizeActionLabel(item.action),
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      deadlineDate: normalizeDeadlineDate(item.deadlineDate),
+      deadlineMode: normalizeDeadlineMode(item.deadlineMode),
+      reminderAt: item.reminderAt || null,
     }));
   } catch (error) {
     console.error(error);
@@ -442,6 +472,140 @@ function loadResolvedLog() {
 function normalizeActionLabel(value) {
   const text = String(value || "").trim();
   return text || ACTION_FALLBACK_LABEL;
+}
+
+function parseTags(value) {
+  return [...new Set(
+    String(value || "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+  )];
+}
+
+function renderTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) {
+    return "";
+  }
+
+  return `<div class="tag-list">${tags
+    .map((tag) => `<span class="tag-chip">#${escapeHtml(tag)}</span>`)
+    .join("")}</div>`;
+}
+
+function normalizeDeadlineDate(value) {
+  const v = String(value || "").trim();
+  if (!v) {
+    return "";
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return "";
+  }
+  return v;
+}
+
+function normalizeDeadlineMode(value) {
+  const mode = String(value || "none").trim().toLowerCase();
+  if (mode === "before" || mode === "on" || mode === "after") {
+    return mode;
+  }
+  return "none";
+}
+
+function computeReminderAt(deadlineDate, deadlineMode) {
+  if (!deadlineDate || deadlineMode === "none") {
+    return null;
+  }
+
+  const base = new Date(`${deadlineDate}T08:00:00`);
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+
+  if (deadlineMode === "before") {
+    base.setDate(base.getDate() - 1);
+  }
+  if (deadlineMode === "after") {
+    base.setDate(base.getDate() + 1);
+  }
+
+  return base.toISOString();
+}
+
+function renderDeadline(item) {
+  const deadlineDate = normalizeDeadlineDate(item.deadlineDate);
+  const deadlineMode = normalizeDeadlineMode(item.deadlineMode);
+  if (!deadlineDate || deadlineMode === "none") {
+    return "";
+  }
+
+  const reminderText = item.reminderAt
+    ? new Date(item.reminderAt).toLocaleString()
+    : "not set";
+  return `<p class="deadline-note">Deadline ${escapeHtml(deadlineDate)} | ${escapeHtml(deadlineMode)} | Reminder: ${escapeHtml(reminderText)}</p>`;
+}
+
+function detectDateFromText(text) {
+  if (!text) {
+    return "";
+  }
+
+  const tokens = [];
+  const ymd = text.match(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g) || [];
+  const dmy = text.match(/\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g) || [];
+  tokens.push(...ymd, ...dmy);
+
+  for (const token of tokens) {
+    const iso = normalizeDateTokenToIso(token);
+    if (iso) {
+      return iso;
+    }
+  }
+
+  return "";
+}
+
+function normalizeDateTokenToIso(token) {
+  const cleaned = String(token).trim();
+  const ymdMatch = cleaned.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if (ymdMatch) {
+    const y = Number(ymdMatch[1]);
+    const m = Number(ymdMatch[2]);
+    const d = Number(ymdMatch[3]);
+    return validateDateParts(y, m, d);
+  }
+
+  const dmyMatch = cleaned.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/);
+  if (dmyMatch) {
+    const d = Number(dmyMatch[1]);
+    const m = Number(dmyMatch[2]);
+    let y = Number(dmyMatch[3]);
+    if (y < 100) {
+      y = 2000 + y;
+    }
+    return validateDateParts(y, m, d);
+  }
+
+  return "";
+}
+
+function validateDateParts(year, month, day) {
+  if (year < 2000 || year > 2100) {
+    return "";
+  }
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return "";
+  }
+
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
 }
 
 function consumePendingSharedImageUri() {

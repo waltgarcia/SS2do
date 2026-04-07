@@ -197,6 +197,10 @@ label {
   font-size: 0.85rem;
 }
 
+#deadlineModeSelect {
+  margin-top: 6px;
+}
+
 input,
 textarea,
 select {
@@ -315,6 +319,29 @@ button:disabled {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  font-size: 0.78rem;
+  font-family: "IBM Plex Mono", monospace;
+  background: rgba(239, 127, 26, 0.14);
+  border: 1px solid rgba(239, 127, 26, 0.35);
+  color: #8b4b09;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.deadline-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #245156;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .item-actions {
