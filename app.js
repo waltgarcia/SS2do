@@ -27,6 +27,7 @@ const ACTIONS = [
 ];
 
 const ACTION_FALLBACK_LABEL = "General follow-up";
+const NOTIF_TITLE = "SS2do reminder";
 
 const state = {
   file: null,
@@ -35,6 +36,7 @@ const state = {
   querySuggestions: [],
   items: loadItems(),
   resolvedLog: loadResolvedLog(),
+  notificationsEnabled: false,
 };
 
 const screenshotInput = document.querySelector("#screenshotInput");
@@ -61,6 +63,7 @@ renderItems();
 renderResolvedLog();
 syncSaveButtonState();
 consumePendingSharedImageUri();
+initNotificationSupport();
 
 screenshotInput.addEventListener("change", onFileSelected);
 cameraInput.addEventListener("change", onFileSelected);
@@ -293,6 +296,7 @@ async function saveItem() {
     deadlineDate,
     deadlineMode,
     reminderAt,
+    notificationId: reminderAt ? notificationIdFromItem(query + Date.now()) : null,
     done: false,
     resolvedAt: null,
   };
@@ -304,6 +308,7 @@ async function saveItem() {
     ocrStatus.textContent = "Could not save this item due to local storage size. Try a smaller screenshot.";
     return;
   }
+  await scheduleReminderForItem(item);
   renderItems();
 
   ocrStatus.textContent = "Saved to queue.";
@@ -358,7 +363,7 @@ function renderItems() {
   }
 }
 
-function handleItemAction(event) {
+async function handleItemAction(event) {
   const id = event.target.dataset.id;
   const type = event.target.dataset.type;
   const index = state.items.findIndex((item) => item.id === id);
@@ -367,6 +372,7 @@ function handleItemAction(event) {
   }
 
   if (type === "delete") {
+    await cancelReminderForItem(state.items[index]);
     state.items.splice(index, 1);
   }
 
@@ -375,6 +381,7 @@ function handleItemAction(event) {
     const wasDone = item.done;
     item.done = !item.done;
     if (!wasDone && item.done) {
+      await cancelReminderForItem(item);
       const resolvedAt = new Date().toISOString();
       item.resolvedAt = resolvedAt;
       state.resolvedLog.unshift({
@@ -388,6 +395,7 @@ function handleItemAction(event) {
     }
     if (wasDone && !item.done) {
       item.resolvedAt = null;
+      await scheduleReminderForItem(item);
     }
   }
 
@@ -434,6 +442,105 @@ function saveItems(items) {
   }
 }
 
+async function initNotificationSupport() {
+  if (!isNativeNotificationAvailable()) {
+    return;
+  }
+
+  try {
+    const LocalNotifications = window.Capacitor.Plugins.LocalNotifications;
+    const permission = await LocalNotifications.checkPermissions();
+    if (permission.display === "granted") {
+      state.notificationsEnabled = true;
+      return;
+    }
+
+    const requested = await LocalNotifications.requestPermissions();
+    state.notificationsEnabled = requested.display === "granted";
+  } catch (error) {
+    console.error(error);
+    state.notificationsEnabled = false;
+  }
+}
+
+function isNativeNotificationAvailable() {
+  return Boolean(
+    window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform() &&
+      window.Capacitor.Plugins &&
+      window.Capacitor.Plugins.LocalNotifications
+  );
+}
+
+function notificationIdFromItem(seed) {
+  let hash = 0;
+  const text = String(seed || "ss2do");
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  const normalized = Math.abs(hash) % 2147483000;
+  return normalized + 1;
+}
+
+async function scheduleReminderForItem(item) {
+  if (!item || item.done || !item.reminderAt || !item.notificationId) {
+    return;
+  }
+  if (!isNativeNotificationAvailable()) {
+    return;
+  }
+
+  if (!state.notificationsEnabled) {
+    await initNotificationSupport();
+  }
+  if (!state.notificationsEnabled) {
+    ocrStatus.textContent = "Reminder saved, but notification permission is not granted.";
+    return;
+  }
+
+  const at = new Date(item.reminderAt);
+  if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) {
+    return;
+  }
+
+  try {
+    const LocalNotifications = window.Capacitor.Plugins.LocalNotifications;
+    await LocalNotifications.cancel({
+      notifications: [{ id: item.notificationId }],
+    });
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: item.notificationId,
+          title: NOTIF_TITLE,
+          body: item.query,
+          schedule: { at, allowWhileIdle: true },
+          extra: { itemId: item.id, action: item.action },
+        },
+      ],
+    });
+  } catch (error) {
+    console.error(error);
+    ocrStatus.textContent = "Saved, but could not schedule device notification.";
+  }
+}
+
+async function cancelReminderForItem(item) {
+  if (!item || !item.notificationId || !isNativeNotificationAvailable()) {
+    return;
+  }
+
+  try {
+    const LocalNotifications = window.Capacitor.Plugins.LocalNotifications;
+    await LocalNotifications.cancel({
+      notifications: [{ id: item.notificationId }],
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 function loadItems() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]").map((item) => ({
@@ -443,6 +550,11 @@ function loadItems() {
       deadlineDate: normalizeDeadlineDate(item.deadlineDate),
       deadlineMode: normalizeDeadlineMode(item.deadlineMode),
       reminderAt: item.reminderAt || null,
+      notificationId: Number.isInteger(item.notificationId)
+        ? item.notificationId
+        : item.reminderAt
+          ? notificationIdFromItem(item.id || item.query || Date.now())
+          : null,
     }));
   } catch (error) {
     console.error(error);
