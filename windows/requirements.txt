@@ -1,0 +1,11 @@
+# SS2do Windows — Dependencies
+#
+# Install all requirements:
+#   pip install -r requirements.txt
+#
+# Also requires Tesseract-OCR binary:
+#   https://github.com/UB-Mannheim/tesseract/wiki
+#   (Free, open-source, ~60 MB installer)
+
+pillow>=10.0.0
+pytesseract>=0.3.10

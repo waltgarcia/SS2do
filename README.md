@@ -4,6 +4,11 @@ This repository is built around one practical idea: screenshots are usually remi
 
 A screenshot can mean "read this paper", "follow up on this message", "check this invoice", or "come back to this later". The functionality here turns that passive image into an explicit next step and keeps that next step visible in a bucketed queue.
 
+## Platforms in this repository
+
+- Android version (Capacitor): share-sheet flow, mobile capture, local notifications
+- Windows desktop version (Python): native desktop UI with local JSON storage
+
 ## What this functionality does
 
 - Accepts input from gallery, camera, and Android share sheet
@@ -32,6 +37,7 @@ If Android blocks installation, enable install from unknown sources for your fil
 - index.html, app.js, styles.css: core web functionality
 - android/: Capacitor Android project
 - releases/SS2do-debug.apk: installable debug build for quick testing
+- windows/: Windows desktop implementation (Python source + launcher)
 
 ## Security and privacy notes
 
@@ -46,6 +52,34 @@ If Android blocks installation, enable install from unknown sources for your fil
 1. Open a terminal in this folder
 2. Run: python3 -m http.server 8080
 3. Open: http://localhost:8080
+
+## Running the Windows desktop version
+
+Location:
+
+- windows/ss2do_windows.py
+
+Prerequisites:
+
+- Python 3.10+
+- Tesseract OCR for Windows (recommended installer):
+	https://github.com/UB-Mannheim/tesseract/wiki
+
+Install dependencies:
+
+1. Open a terminal in this repository
+2. Run: pip install -r windows/requirements.txt
+
+Run application:
+
+1. Run: python windows/ss2do_windows.py
+2. Or double-click: windows/launch.bat
+
+Notes:
+
+- OCR requires Tesseract installed on the machine
+- App data is stored locally in %APPDATA%\SS2do
+- You can generate SS2do.exe locally with PyInstaller when needed
 
 ## Building APK locally
 
